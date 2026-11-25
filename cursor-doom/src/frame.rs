@@ -37,8 +37,8 @@ impl Downscaler {
         for dy in 0..self.dh {
             let src_row = self.ymap[dy] * engine::WIDTH;
             let dst_row = dy * self.dw;
-            for dx in 0..self.dw {
-                let si = (src_row + self.xmap[dx]) * 4;
+            for (dx, sx) in self.xmap.iter().take(self.dw).enumerate() {
+                let si = (src_row + sx) * 4;
                 let di = (dst_row + dx) * 4;
                 dst[di..di + 4].copy_from_slice(&src[si..si + 4]);
             }

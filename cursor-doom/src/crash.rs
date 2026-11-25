@@ -77,11 +77,14 @@ unsafe extern "system" fn filter(info: *const EXCEPTION_POINTERS) -> i32 {
                 module_of(address),
                 exception.NumberParameters
             ));
-            for index in 0..exception.NumberParameters.min(4) as usize {
-                record(&format!(
-                    "  param[{index}] = 0x{:X}",
-                    exception.ExceptionInformation[index]
-                ));
+            let parameter_count = exception.NumberParameters.min(4) as usize;
+            for (index, value) in exception
+                .ExceptionInformation
+                .iter()
+                .take(parameter_count)
+                .enumerate()
+            {
+                record(&format!("  param[{index}] = 0x{value:X}"));
             }
             let mut frames = [std::ptr::null_mut(); 32];
             let captured = RtlCaptureStackBackTrace(0, &mut frames, None);

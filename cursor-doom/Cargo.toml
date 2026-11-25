@@ -1,0 +1,37 @@
+[package]
+name = "cursor-doom"
+version = "0.1.0"
+edition = "2021"
+description = "Doom, running as your mouse cursor (doomgeneric + Win32 layered overlay)"
+build = "build.rs"
+license = "MIT"
+repository = "https://github.com/virusdeflect21/cursor-doom"
+readme = "../README.md"
+keywords = ["doom", "cursor", "doomgeneric", "windows", "overlay"]
+categories = ["games"]
+
+[dependencies]
+dirs = "7.0.0"
+eframe = "0.37.0"
+rfd = "0.18.0"
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    "Win32_Media_MediaFoundation",
+    "Win32_System_Com",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+cc = "1.11.3"
+
+[profile.release]
+opt-level = 2

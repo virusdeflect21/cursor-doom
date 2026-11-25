@@ -1,0 +1,25 @@
+# Rust build output
+target/
+cursor-doom/target/
+
+# Local vendored-dependency history (upstream clone, not part of this repo)
+.vendor/
+
+# Game data (not redistributable) and local test artefacts
+*.wad
+*.WAD
+*.mp4
+*.bmp
+*.savegame/
+.default.cfg
+
+# Session artefacts
+*.status
+.cursorcheck/
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.user
+Thumbs.db
+.DS_Store

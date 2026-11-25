@@ -1,0 +1,9 @@
+* text=auto
+
+*.png binary
+*.cur binary
+*.ani binary
+*.ico binary
+*.ps1 text eol=crlf
+*.c text
+*.h text

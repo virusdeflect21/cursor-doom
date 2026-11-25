@@ -52,3 +52,19 @@ pub fn write_bgra24(
     }
     out.flush()
 }
+
+/// Writes a 24-bit BMP from an RGBA buffer (alpha ignored), top-down input.
+/// The launcher's screenshots are saved as BMP: lossless, dependency free, and
+/// the release script converts them to PNG.
+pub fn write_rgba24(
+    path: &Path,
+    pixels: &[u8],
+    width: usize,
+    height: usize,
+) -> std::io::Result<()> {
+    let mut bgra = Vec::with_capacity(width * height * 4);
+    for i in (0..pixels.len() / 4).map(|i| i * 4) {
+        bgra.extend_from_slice(&[pixels[i + 2], pixels[i + 1], pixels[i], 255]);
+    }
+    write_bgra24(path, &bgra, width, height)
+}

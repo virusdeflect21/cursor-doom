@@ -2,6 +2,7 @@
 
 [![ci](https://github.com/virusdeflect21/cursor-doom/actions/workflows/ci.yml/badge.svg)](https://github.com/virusdeflect21/cursor-doom/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![platform: Windows](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078d4)](#requirements)
 
 **Doom, as your mouse cursor.**
 
@@ -10,17 +11,43 @@ always-on-top window glued to your pointer, so the pointer *is* the game. The no
 cursor disappears while it is on, every click / drag / scroll still reaches whatever is
 underneath, and the middle mouse button turns it off again.
 
-| Native 320x200 (what the game draws) | The cursor at 128x80, x4 | A 16x16 cursor recorded (upscaled x3) |
+![The three stages of one frame: the engine's 320x200 framebuffer, the 256x160 cursor, and the 512x320 image that lands on screen](docs/screenshots/pipeline.png)
+
+<p align="center"><em>One frame at three stages: engine 320×200 → cursor 256×160 → on screen 512×320.</em></p>
+
+## What it looks like
+
+The launcher - WAD picker, cursor resolution, on-screen scale, behaviour switches and a live
+preview of the game itself:
+
+<img src="docs/screenshots/launcher.png" width="480" alt="The Cursor Doom launcher">
+
+The preview can show three views of the same live frame - the engine's own 320×200 output,
+the pixels the cursor is actually made of, and what lands on the desktop (scale + reticle):
+
+| Native 320×200 | Cursor 128×80 (the pixels the pointer is made of) | On screen 256×160 |
 | --- | --- | --- |
-| <img src="docs/screenshots/native-320x200.png" width="320"> | <img src="docs/screenshots/cursor-128x80-4x.png" width="320"> | <img src="docs/screenshots/recording-16x16-upscaled.png" width="200"> |
+| <img src="docs/screenshots/preview-native.png" width="320" alt="Live native-resolution preview"> | <img src="docs/screenshots/preview-cursor.png" width="320" alt="Live cursor-resolution preview"> | <img src="docs/screenshots/preview-screen.png" width="320" alt="Live on-screen preview"> |
+
+The cursor itself, at two of the supported sizes, magnified with nearest-neighbour so the
+pixels stay square (these are frames the app rendered):
+
+| 128×80, ×5 | 16×16, ×16 |
+| --- | --- |
+| <img src="docs/screenshots/cursor-128x80-5x.png" width="320" alt="128x80 cursor frame"> | <img src="docs/screenshots/cursor-16x16-16x.png" width="160" alt="16x16 cursor frame"> |
+
+A 16×16 cursor recorded to MP4 and decoded back out of the file (the encoder needs 34×34, so
+it is stored at 48×48, ×3):
+
+<img src="docs/screenshots/recording-16x16.png" width="192" alt="48x48 frame decoded from an MP4 recorded from a 16x16 cursor">
 
 ## Features
 
 - **Real Doom, real cursor.** doomgeneric renders 320x200; the frame is downscaled to
-  anything from **16x16 to 256x160** and painted as the pointer image at up to 400%.
+  anything from **16x16 to 256x160** and painted as the pointer image at 25-400%.
 - **It behaves like a cursor.** Click-through, never takes focus, and follows the pointer
-  in the same millisecond it moves (the overlay is repositioned during the engine's own
-  frame wait, not once per frame).
+  within a millisecond (the overlay is repositioned during the engine's own frame wait, not
+  once per frame).
 - **Only the arrows and Ctrl are taken from the desktop.** Everything else, including WASD,
   Space and Enter, keeps working in the application you are using.
 - **Typing always wins.** As soon as a text field has focus (caret or I-beam) the game
@@ -41,21 +68,31 @@ underneath, and the middle mouse button turns it off again.
 - Rust 1.82+ with the MSVC toolchain (Visual Studio 2022 build tools)
 - A Doom IWAD you own (`DOOM.WAD`, `DOOM1.WAD`, `DOOM2.WAD`, `TNT.WAD`, `PLUTONIA.WAD`)
 
-The engine's C sources are compiled into the binary by `build.rs` - no DLLs, no ffmpeg, no
-SDKs. Point `DOOMGENERIC_DIR` at another engine checkout to build against it.
+The engine's C sources are vendored in `doomgeneric/` and compiled into the binary by
+`build.rs` - no DLLs, no ffmpeg, no SDKs. Point `DOOMGENERIC_DIR` at another engine checkout
+to build against it instead.
+
+**This repository ships no game data.** Doom is still sold by id/Bethesda, and GOG sells it
+too; any of those IWADs works. Put the WAD in the repository root or pick it in the launcher.
+
+## Download
+
+Every tagged release carries a ready-to-run `cursor-doom-vX.Y.Z-windows-x64.zip` on the
+[releases page](https://github.com/virusdeflect21/cursor-doom/releases) (built by CI, with a
+SHA-256 next to it). Extract it, drop your IWAD beside the exe, and run it - no toolchain
+needed. The build is unsigned, so SmartScreen may ask once.
 
 ## Build and run
 
 ```sh
-git clone <this repo> cursor-doom
+git clone https://github.com/virusdeflect21/cursor-doom
 cd cursor-doom/cursor-doom
 cargo build --release
 ./target/release/cursor-doom.exe
 ```
 
-Put `DOOM.WAD` in the repository root (or pick it in the launcher). The launcher opens:
-choose the WAD, the cursor resolution (default 256x160), the on-screen scale and the anchor,
-then press **Turn on the doom cursor**.
+The launcher opens. Choose the WAD, the cursor resolution (default 256x160), the on-screen
+scale and the anchor, then press **Turn on the doom cursor**.
 
 ## Controls
 
@@ -158,7 +195,9 @@ cursor-doom --session --wad <wad> [--width 256] [--height 160] [--scale 100]
 cursor-doom --selftest --wad <wad> [--frames 90] [--out <dir>] [--record]
            [--real-time] [--width 256] [--height 160] [--scale 100]
 cursor-doom --probe <file.mp4> --out <dir>
+cursor-doom --screenshot <file.bmp>
 cursor-doom --cursor-report
+cursor-doom --cursor-dump <file.bmp>
 cursor-doom --restore-cursor
 ```
 
@@ -166,6 +205,8 @@ cursor-doom --restore-cursor
   `cursor-*.bmp` (and an MP4 with `--record`) and prints a summary - the way the renderer is
   checked without touching the desktop.
 - `--probe` decodes the first frame of an MP4 so recordings can be verified.
+- `--screenshot` renders the launcher once, saves the window to a BMP and exits (this is how
+  the screenshots above were taken).
 - `--cursor-report` prints the live cursor handle, size, monochrome flag and whether it is the
   transparent placeholder.
 - `--cursor-dump <file.bmp>` decodes the pointer bitmap into a BMP and prints an ASCII
@@ -181,7 +222,7 @@ they are blanked) and `cursor-guard.exe`.
 ## How it works
 
 ```
-DOOM.WAD -> doomgeneric (C, compiled by build.rs at 320x200)
+DOOM.WAD -> doomgeneric (C, vendored, compiled by build.rs at 320x200)
          -> engine.rs     FFI: DG_* callbacks, pause-able clock
          -> frame.rs      nearest-neighbour downscale + optional reticle
          -> overlay.rs    layered, click-through, topmost, no-activate window
@@ -200,9 +241,9 @@ DOOM.WAD -> doomgeneric (C, compiled by build.rs at 320x200)
   Windows silently drops low-level hooks.
 - `session.rs` runs the loop at 35 fps on absolute deadlines, drains events between tics, and
   keeps the overlay glued to the pointer from the engine's idle callback.
-- `launcher.rs` spawns the same executable with `--session`, polls `session.status` for the live
-  panel and restores the cursors when the child exits - a crash in the C engine can never
-  leave you without a pointer.
+- `launcher.rs` spawns the same executable with `--session`, polls `session.status` for the
+  live panel and restores the cursors when the child exits - a crash in the C engine can
+  never leave you without a pointer.
 
 ## Development
 
@@ -226,8 +267,10 @@ cursor-doom.exe --cursor-dump after.bmp    # the arrow again
 
 ## Legal
 
-Doom is a trademark of id Software. This project contains no Doom assets: you must supply
-your own IWAD. The launcher, overlay and glue in this repository are MIT licensed - see [LICENSE](LICENSE).
+Doom is a trademark of id Software. This project contains no Doom assets and no game data:
+you must supply your own IWAD.
+
+The launcher, overlay and glue in this repository are MIT licensed - see [LICENSE](LICENSE).
 `doomgeneric/` is a vendored, unmodified copy of [doomgeneric](https://github.com/ozkl/doomgeneric)
 licensed under **GPL-2.0** (see `doomgeneric/LICENSE`); the release binary links it, so binary
 builds are GPL-2.0 as a whole.

@@ -31,6 +31,8 @@ mod status;
 mod textmode;
 mod wad;
 
+use session::log;
+
 use std::path::PathBuf;
 
 fn main() {
@@ -40,6 +42,15 @@ fn main() {
     let mode = args.get(1).map(String::as_str).unwrap_or("");
 
     match mode {
+        "--screenshot" => {
+            let Some(path) = value(&args, "--screenshot") else {
+                eprintln!("--screenshot needs a path");
+                return;
+            };
+            if let Err(err) = launcher::run_with(Some(PathBuf::from(path))) {
+                eprintln!("could not open the launcher: {err}");
+            }
+        }
         "--session" => run_session(&args),
         "--selftest" => run_selftest(&args),
         "--probe" => run_probe(&args),

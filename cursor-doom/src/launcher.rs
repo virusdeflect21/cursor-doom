@@ -47,9 +47,20 @@ fn upload(
 }
 
 pub fn run() -> eframe::Result {
+    run_with(None)
+}
+
+/// Opens the launcher. With `screenshot` it renders a few frames, writes the
+/// window contents to that PNG and quits (used to document the app).
+pub fn run_with(screenshot: Option<PathBuf>) -> eframe::Result {
+    let tall = screenshot.is_some();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([560.0, 660.0])
+            .with_inner_size(if tall {
+                [600.0, 1000.0]
+            } else {
+                [560.0, 660.0]
+            })
             .with_min_inner_size([500.0, 560.0])
             .with_title("Cursor Doom"),
         ..Default::default()
@@ -57,7 +68,7 @@ pub fn run() -> eframe::Result {
     eframe::run_native(
         "Cursor Doom",
         options,
-        Box::new(|_cc| Ok(Box::new(Launcher::new()))),
+        Box::new(move |_cc| Ok(Box::new(Launcher::with_options(screenshot.clone())))),
     )
 }
 /// Builds and starts the worker process. Kept separate from the GUI so the
@@ -161,9 +172,13 @@ pub struct Launcher {
     preview_screen_size: (u32, u32),
     preview_last: std::time::Instant,
     preview_live: bool,
+    /// `--screenshot <png>`: save one frame of the window and exit, so the
+    /// README can show the real launcher instead of a mock-up.
+    screenshot_target: Option<PathBuf>,
+    screenshot_frames: u32,
 }
 impl Launcher {
-    fn new() -> Self {
+    fn with_options(screenshot_target: Option<PathBuf>) -> Self {
         // A previous session may have died while the cursor was blanked.
         cursor::restore_system_cursors();
         let settings = Settings::load();
@@ -182,6 +197,8 @@ impl Launcher {
             preview_screen_size: (0, 0),
             preview_last: std::time::Instant::now() - std::time::Duration::from_secs(1),
             preview_live: false,
+            screenshot_target,
+            screenshot_frames: 0,
         };
         launcher.refresh_wad_info();
         launcher
@@ -459,6 +476,9 @@ impl eframe::App for Launcher {
         self.poll(ctx);
     }
     fn ui(&mut self, root: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        if self.screenshot_target.is_some() {
+            self.finish_screenshot(root);
+        }
         egui::CentralPanel::default().show(root, |ui| {
                      egui::ScrollArea::vertical().show(ui, |ui| {
                      ui.heading("Cursor Doom");
@@ -495,10 +515,20 @@ impl eframe::App for Launcher {
                             1,
                             format!("Cursor {}x{}", cursor.0, cursor.1),
                         );
+                        let on_screen = if screen.0 > 0 {
+                            screen
+                        } else {
+                            let (w, h) = crate::frame::display_size(
+                                self.settings.width as usize,
+                                self.settings.height as usize,
+                                self.settings.scale_percent,
+                            );
+                            (w as u32, h as u32)
+                        };
                         ui.selectable_value(
                             &mut self.settings.preview_view,
                             2,
-                            format!("On screen {}x{}", screen.0, screen.1),
+                            format!("On screen {}x{}", on_screen.0, on_screen.1),
                         );
                     });
                     ui.add_enabled_ui(!self.busy(), |ui| {
@@ -634,10 +664,19 @@ impl eframe::App for Launcher {
                      .suffix(" px"),
                      );
                      });
-                     // keep H.264 happy and the cursor inside the promised range
-                     self.settings.width = (self.settings.width.clamp(16, 256) / 2) * 2;
-                     self.settings.height = (self.settings.height.clamp(16, 160) / 2) * 2;
                      });
+                     // Keep the cursor inside the promised range and on even numbers
+                     // (H.264 needs even frames). Only touch a value when the user
+                     // actually changes it: clamping every frame used to snap a
+                     // half-typed number back to the previous size.
+                     let width = (self.settings.width.clamp(16, 256) / 2) * 2;
+                     let height = (self.settings.height.clamp(16, 160) / 2) * 2;
+                     if width != self.settings.width {
+                         self.settings.width = width;
+                     }
+                     if height != self.settings.height {
+                         self.settings.height = height;
+                     }
                      ui.add_space(4.0);
                      ui.add_enabled_ui(!self.busy(), |ui| {
                      ui.add(
@@ -653,11 +692,12 @@ impl eframe::App for Launcher {
                      );
                      ui.label(
                      egui::RichText::new(format!(
-                     "Cursor image: {dw}×{dh} px, 35 fps"
+                     "On screen: {dw}×{dh} px once the cursor is on, 35 fps"
                      ))
                      .small()
                      .weak(),
                      );
+
                      });
                      ui.add_space(6.0);
                      // ---------------- behaviour ----------------
@@ -839,7 +879,7 @@ impl eframe::App for Launcher {
                      ui.add_space(4.0);
                      ui.label(
                      egui::RichText::new(
-                     "The doom view is click-through: click, drag, scroll and everything else you normally do with the pointer still works. While it is on, WASD / arrows / Right Ctrl are captured by Doom.",
+                     "The doom view is click-through: click, drag, scroll and everything else you normally do with the pointer still works. While it is on, only the arrows and Ctrl belong to Doom - WASD, Space, Enter and every other key keep going to the app you are using.",
                      )
                      .small()
                      .weak(),
@@ -864,6 +904,38 @@ Your normal arrow pointer disappears while the doom cursor is on — the app ask
             );
             });
         });
+    }
+}
+
+impl Launcher {
+    /// Grabs the window once it has settled, then asks egui to close.
+    fn finish_screenshot(&mut self, root: &mut egui::Ui) {
+        self.screenshot_frames += 1;
+        // Fonts, sliders and the layout only settle after a few frames.
+        if self.screenshot_frames < 8 {
+            root.ctx().request_repaint();
+            return;
+        }
+        let Some(path) = self.screenshot_target.clone() else {
+            return;
+        };
+        let ctx = root.ctx().clone();
+        ctx.request_screenshot(move |image: std::sync::Arc<egui::ColorImage>| {
+            let (width, height) = (image.size[0], image.size[1]);
+            let mut rgba = Vec::with_capacity(width * height * 4);
+            for pixel in &image.pixels {
+                rgba.extend_from_slice(&[pixel.r(), pixel.g(), pixel.b(), 255]);
+            }
+            match crate::bmp::write_rgba24(&path, &rgba, width, height) {
+                Ok(()) => crate::log(&format!(
+                    "screenshot: {} ({width}x{height})",
+                    path.display()
+                )),
+                Err(err) => crate::log(&format!("screenshot failed: {err}")),
+            }
+        });
+        root.ctx().request_repaint();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
     }
 }
 

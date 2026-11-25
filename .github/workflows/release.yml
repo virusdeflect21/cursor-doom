@@ -1,0 +1,78 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-exe:
+    name: build + attach release (windows, msvc)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cursor-doom
+
+      - name: Build
+        working-directory: cursor-doom
+        run: cargo build --release
+
+      - name: Smoke test
+        working-directory: cursor-doom
+        run: ./target/release/cursor-doom.exe --help
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          if ($version -notmatch '^v') { $version = "dev" }
+          $dir = "cursor-doom-$version-windows-x64"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item cursor-doom/target/release/cursor-doom.exe $dir/
+          Copy-Item README.md, LICENSE $dir/
+          # Windows Data Execution Prevention / long paths aside, no other files are
+          # needed: the engine is compiled into the exe.
+          Compress-Archive -Path $dir -DestinationPath "$dir.zip"
+          Get-FileHash "$dir.zip" -Algorithm SHA256 | ForEach-Object {
+            "$($_.Hash)  $dir.zip" | Out-File -Encoding ascii "$dir.zip.sha256"
+          }
+          Get-Content "$dir.zip.sha256"
+          "zip=$dir.zip" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.zip }}
+            ${{ env.zip }}.sha256
+          generate_release_notes: true
+          body: |
+            **Cursor Doom** - doomgeneric running as your mouse cursor.
+
+            ### Install
+            1. Download `${{ env.zip }}` and extract it anywhere.
+            2. Put a Doom IWAD (`DOOM.WAD`, `DOOM.WAD` from Doom 1, `DOOM2.WAD`, ...) next to
+               `cursor-doom.exe`, or pick one in the launcher. **No game data is included** -
+               you need your own copy of Doom.
+            3. Run `cursor-doom.exe`, pick the cursor resolution and press
+               *Turn on the doom cursor*.
+
+            ### Controls
+            Arrows walk and turn, `Ctrl` shoots / opens doors / confirms menus, `Esc` opens
+            Doom's menu, `F8` freezes the game, `F9` records an MP4 to your Downloads folder,
+            and the **middle mouse button** turns the cursor off again. WASD, Space and Enter
+            are left alone for the rest of your desktop.
+
+            The build is unsigned, so Windows SmartScreen may warn once ("More info" ->
+            "Run anyway"), and the SHA-256 of the zip is attached for verification.

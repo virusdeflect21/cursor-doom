@@ -235,7 +235,7 @@ fn current_target(width: usize, height: usize, anchor: Anchor) -> (i32, i32) {
     pointer_target(width, height, anchor)
 }
 
-fn log(message: &str) {
+pub fn log(message: &str) {
     println!("[cursor-doom] {message}");
 }
 
